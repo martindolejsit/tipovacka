@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import AdminPanel from './AdminPanel'
 
 const statusLabels = {
   scheduled: 'Naplánováno',
@@ -22,6 +23,7 @@ function App() {
   const [loadingMatches, setLoadingMatches] = useState(true)
   const [leaderboard, setLeaderboard] = useState([])
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   // =========================
   // AUTH
@@ -216,6 +218,30 @@ useEffect(() => {
   loadLeaderboard()
 }, [session])
 
+useEffect(() => {
+  async function loadAdminStatus() {
+    if (!session) {
+      setIsAdmin(false)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', session.user.id)
+      .single()
+
+    if (error) {
+      console.error(error)
+      setIsAdmin(false)
+      return
+    }
+
+    setIsAdmin(data.is_admin === true)
+  }
+
+  loadAdminStatus()
+}, [session])
 
   async function handleRegister(e) {
     e.preventDefault()
@@ -651,6 +677,20 @@ useEffect(() => {
           </div>
         )
       })}
+{isAdmin && (
+  <AdminPanel
+    matches={matches}
+    onMatchUpdated={(updatedMatch) => {
+      setMatches((currentMatches) =>
+        currentMatches.map((match) =>
+          match.id === updatedMatch.id
+            ? updatedMatch
+            : match
+        )
+      )
+    }}
+  />
+)}
     </div>
   )
 }
