@@ -12,6 +12,19 @@ const statusOptions = [
 function AdminPanel({ matches, onMatchUpdated }) {
   const [values, setValues] = useState({})
 
+  const [teams, setTeams] = useState([])
+  const [activeSeasonId, setActiveSeasonId] = useState(null)
+
+  const [newMatch, setNewMatch] = useState({
+    round: '',
+    home_team_id: '',
+    away_team_id: '',
+    date: '',
+    time: '',
+  })
+
+  const [newMatchMessage, setNewMatchMessage] = useState('')
+
   useEffect(() => {
     const initialValues = {}
 
@@ -28,6 +41,35 @@ function AdminPanel({ matches, onMatchUpdated }) {
     setValues(initialValues)
   }, [matches])
 
+  useEffect(() => {
+    async function loadAdminData() {
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('teams')
+        .select('id, name')
+        .order('name')
+
+      if (teamsError) {
+        console.error(teamsError)
+      } else {
+        setTeams(teamsData)
+      }
+
+      const { data: seasonData, error: seasonError } = await supabase
+        .from('seasons')
+        .select('id')
+        .eq('is_active', true)
+        .single()
+
+      if (seasonError) {
+        console.error(seasonError)
+      } else {
+        setActiveSeasonId(seasonData.id)
+      }
+    }
+
+    loadAdminData()
+  }, [])
+
   function changeValue(matchId, field, value) {
     setValues((current) => ({
       ...current,
@@ -37,6 +79,58 @@ function AdminPanel({ matches, onMatchUpdated }) {
         message: '',
       },
     }))
+  }
+
+  async function createMatch(e) {
+    e.preventDefault()
+
+    setNewMatchMessage('')
+
+    if (!activeSeasonId) {
+      setNewMatchMessage('Aktivní sezóna nebyla nalezena.')
+      return
+    }
+
+    if (newMatch.home_team_id === newMatch.away_team_id) {
+      setNewMatchMessage('Domácí a hosté musí být různé týmy.')
+      return
+    }
+
+    const kickoff = new Date(
+      `${newMatch.date}T${newMatch.time}:00`
+    )
+
+    if (Number.isNaN(kickoff.getTime())) {
+      setNewMatchMessage('Neplatné datum nebo čas.')
+      return
+    }
+
+    const { error } = await supabase
+      .from('matches')
+      .insert({
+        season_id: activeSeasonId,
+        round: Number(newMatch.round),
+        home_team_id: Number(newMatch.home_team_id),
+        away_team_id: Number(newMatch.away_team_id),
+        kickoff_at: kickoff.toISOString(),
+        status: 'scheduled',
+      })
+
+    if (error) {
+      console.error(error)
+      setNewMatchMessage('Zápas se nepodařilo vytvořit.')
+      return
+    }
+
+    setNewMatch({
+      round: '',
+      home_team_id: '',
+      away_team_id: '',
+      date: '',
+      time: '',
+    })
+
+    setNewMatchMessage('Zápas vytvořen ✓')
   }
 
   async function saveResult(match) {
@@ -123,6 +217,135 @@ function AdminPanel({ matches, onMatchUpdated }) {
       <hr />
 
       <h2>Administrace</h2>
+
+      <h3>Přidat nový zápas</h3>
+
+      <form onSubmit={createMatch}>
+        <div>
+          <label>
+            Kolo:
+            <br />
+            <input
+              type="number"
+              min="1"
+              value={newMatch.round}
+              onChange={(e) =>
+                setNewMatch({
+                  ...newMatch,
+                  round: e.target.value,
+                })
+              }
+              required
+            />
+          </label>
+        </div>
+
+        <br />
+
+        <div>
+          <label>
+            Domácí:
+            <br />
+            <select
+              value={newMatch.home_team_id}
+              onChange={(e) =>
+                setNewMatch({
+                  ...newMatch,
+                  home_team_id: e.target.value,
+                })
+              }
+              required
+            >
+              <option value="">Vyber tým</option>
+
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <br />
+
+        <div>
+          <label>
+            Hosté:
+            <br />
+            <select
+              value={newMatch.away_team_id}
+              onChange={(e) =>
+                setNewMatch({
+                  ...newMatch,
+                  away_team_id: e.target.value,
+                })
+              }
+              required
+            >
+              <option value="">Vyber tým</option>
+
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <br />
+
+        <div>
+          <label>
+            Datum:
+            <br />
+            <input
+              type="date"
+              value={newMatch.date}
+              onChange={(e) =>
+                setNewMatch({
+                  ...newMatch,
+                  date: e.target.value,
+                })
+              }
+              required
+            />
+          </label>
+        </div>
+
+        <br />
+
+        <div>
+          <label>
+            Čas:
+            <br />
+            <input
+              type="time"
+              value={newMatch.time}
+              onChange={(e) =>
+                setNewMatch({
+                  ...newMatch,
+                  time: e.target.value,
+                })
+              }
+              required
+            />
+          </label>
+        </div>
+
+        <br />
+
+        <button type="submit">
+          Přidat zápas
+        </button>
+
+        {newMatchMessage && (
+          <p>{newMatchMessage}</p>
+        )}
+      </form>
+
+      <hr />
 
       {matches.map((match) => {
         const value = values[match.id]
