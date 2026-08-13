@@ -25,6 +25,7 @@ function App() {
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedRound, setSelectedRound] = useState(4)
+  const [availableRounds, setAvailableRounds] = useState([])
 
   // =========================
   // AUTH
@@ -217,7 +218,7 @@ useEffect(() => {
   }
 
   loadLeaderboard()
-}, [session, selectedRound])
+}, [session])
 
 useEffect(() => {
   async function loadAdminStatus() {
@@ -243,6 +244,46 @@ useEffect(() => {
 
   loadAdminStatus()
 }, [session])
+
+
+useEffect(() => {
+  async function loadAvailableRounds() {
+    const { data: season, error: seasonError } = await supabase
+      .from('seasons')
+      .select('id')
+      .eq('is_active', true)
+      .single()
+
+    if (seasonError) {
+      console.error(seasonError)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from('matches')
+      .select('round')
+      .eq('season_id', season.id)
+      .order('round')
+
+    if (error) {
+      console.error(error)
+      return
+    }
+
+    const rounds = [...new Set(data.map((match) => match.round))]
+
+    setAvailableRounds(rounds)
+
+    if (
+      rounds.length > 0 &&
+      !rounds.includes(selectedRound)
+    ) {
+      setSelectedRound(rounds[0])
+    }
+  }
+
+  loadAvailableRounds()
+}, [])
 
   async function handleRegister(e) {
     e.preventDefault()
@@ -567,7 +608,7 @@ useEffect(() => {
   value={selectedRound}
   onChange={(e) => setSelectedRound(Number(e.target.value))}
 >
-  {[1, 2, 3, 4, 5].map((round) => (
+  {availableRounds.map((round) => (
     <option key={round} value={round}>
       {round}. kolo
     </option>
