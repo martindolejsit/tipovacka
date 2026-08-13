@@ -20,6 +20,8 @@ function App() {
   const [matches, setMatches] = useState([])
   const [tips, setTips] = useState({})
   const [loadingMatches, setLoadingMatches] = useState(true)
+  const [leaderboard, setLeaderboard] = useState([])
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
 
   // =========================
   // AUTH
@@ -148,6 +150,72 @@ function App() {
   // =========================
   // REGISTRACE
   // =========================
+useEffect(() => {
+  async function loadLeaderboard() {
+    if (!session) {
+      setLeaderboard([])
+      return
+    }
+
+    setLoadingLeaderboard(true)
+
+    const { data: totals, error: totalsError } = await supabase
+      .from('leaderboard_totals')
+      .select(`
+        user_id,
+        total_points,
+        exact_tips,
+        correct_tips,
+        tip_count
+      `)
+      .order('total_points', { ascending: false })
+      .order('exact_tips', { ascending: false })
+
+    if (totalsError) {
+      console.error(totalsError)
+      setLoadingLeaderboard(false)
+      return
+    }
+
+    const userIds = totals.map((row) => row.user_id)
+
+    if (userIds.length === 0) {
+      setLeaderboard([])
+      setLoadingLeaderboard(false)
+      return
+    }
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', userIds)
+
+    if (profilesError) {
+      console.error(profilesError)
+      setLoadingLeaderboard(false)
+      return
+    }
+
+    const profileMap = Object.fromEntries(
+      profiles.map((profile) => [
+        profile.id,
+        profile.display_name,
+      ])
+    )
+
+    const result = totals.map((row) => ({
+      ...row,
+      display_name:
+        profileMap[row.user_id] ?? 'Neznámý hráč',
+    }))
+
+    setLeaderboard(result)
+    setLoadingLeaderboard(false)
+  }
+
+  loadLeaderboard()
+}, [session])
+
 
   async function handleRegister(e) {
     e.preventDefault()
@@ -425,6 +493,46 @@ function App() {
       </button>
 
       <hr />
+	  <h2>Pořadí</h2>
+
+{!loadingLeaderboard && leaderboard.length > 0 && (
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Hráč</th>
+        <th>Body</th>
+        <th>Přesně</th>
+        <th>Správně</th>
+        <th>Tipů</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {leaderboard.map((player, index) => (
+        <tr key={player.user_id}>
+          <td>{index + 1}.</td>
+
+          <td>
+            <strong>{player.display_name}</strong>
+          </td>
+
+          <td>
+            <strong>{player.total_points}</strong>
+          </td>
+
+          <td>{player.exact_tips}</td>
+
+          <td>{player.correct_tips}</td>
+
+          <td>{player.tip_count}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+)}
+
+
 
       <h2>4. kolo</h2>
 
