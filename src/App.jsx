@@ -24,6 +24,7 @@ function App() {
   const [leaderboard, setLeaderboard] = useState([])
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [selectedRound, setSelectedRound] = useState(4)
 
   // =========================
   // AUTH
@@ -90,7 +91,7 @@ function App() {
           )
         `)
         .eq('season_id', season.id)
-        .eq('round', 4)
+        .eq('round', selectedRound)
         .order('kickoff_at')
 
       if (matchesError) {
@@ -147,7 +148,7 @@ function App() {
     }
 
     loadData()
-  }, [session])
+}, [session, selectedRound])
 
   // =========================
   // REGISTRACE
@@ -216,7 +217,7 @@ useEffect(() => {
   }
 
   loadLeaderboard()
-}, [session])
+}, [session, selectedRound])
 
 useEffect(() => {
   async function loadAdminStatus() {
@@ -560,7 +561,18 @@ useEffect(() => {
 
 
 
-      <h2>4. kolo</h2>
+<h2>{selectedRound}. kolo</h2>
+
+<select
+  value={selectedRound}
+  onChange={(e) => setSelectedRound(Number(e.target.value))}
+>
+  {[1, 2, 3, 4, 5].map((round) => (
+    <option key={round} value={round}>
+      {round}. kolo
+    </option>
+  ))}
+</select>
 
       {loadingMatches && (
         <p>Načítám zápasy...</p>
