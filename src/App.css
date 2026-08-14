@@ -561,13 +561,19 @@
 /* Login / registrace */
 
 .auth-page {
+  width: 100%;
   min-height: 100vh;
+  box-sizing: border-box;
   padding: 48px 20px;
   display: grid;
   place-items: center;
   background:
-    radial-gradient(circle at 50% -10%, rgba(196, 255, 0, 0.16), transparent 34rem),
-    #0c1421;
+    radial-gradient(
+      circle at 50% -10%,
+      rgba(196, 255, 0, 0.16),
+      transparent 34rem
+    ),
+    #000000;
 }
 
 .auth-shell {
