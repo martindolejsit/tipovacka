@@ -9,9 +9,12 @@ const statusOptions = [
   { value: 'cancelled', label: 'Zrušeno' },
 ]
 
-function AdminPanel({ matches, onMatchUpdated }) {
+function AdminPanel({
+  matches,
+  onMatchUpdated,
+  onMatchCreated,
+}) {
   const [values, setValues] = useState({})
-
   const [teams, setTeams] = useState([])
   const [activeSeasonId, setActiveSeasonId] = useState(null)
 
@@ -51,7 +54,7 @@ function AdminPanel({ matches, onMatchUpdated }) {
       if (teamsError) {
         console.error(teamsError)
       } else {
-        setTeams(teamsData)
+        setTeams(teamsData ?? [])
       }
 
       const { data: seasonData, error: seasonError } = await supabase
@@ -83,7 +86,6 @@ function AdminPanel({ matches, onMatchUpdated }) {
 
   async function createMatch(e) {
     e.preventDefault()
-
     setNewMatchMessage('')
 
     if (!activeSeasonId) {
@@ -91,8 +93,26 @@ function AdminPanel({ matches, onMatchUpdated }) {
       return
     }
 
+    if (
+      !newMatch.round ||
+      !newMatch.home_team_id ||
+      !newMatch.away_team_id ||
+      !newMatch.date ||
+      !newMatch.time
+    ) {
+      setNewMatchMessage('Vyplň všechna pole.')
+      return
+    }
+
     if (newMatch.home_team_id === newMatch.away_team_id) {
       setNewMatchMessage('Domácí a hosté musí být různé týmy.')
+      return
+    }
+
+    const round = Number(newMatch.round)
+
+    if (!Number.isInteger(round) || round < 1) {
+      setNewMatchMessage('Zadej platné číslo kola.')
       return
     }
 
@@ -109,7 +129,7 @@ function AdminPanel({ matches, onMatchUpdated }) {
       .from('matches')
       .insert({
         season_id: activeSeasonId,
-        round: Number(newMatch.round),
+        round,
         home_team_id: Number(newMatch.home_team_id),
         away_team_id: Number(newMatch.away_team_id),
         kickoff_at: kickoff.toISOString(),
@@ -121,6 +141,8 @@ function AdminPanel({ matches, onMatchUpdated }) {
       setNewMatchMessage('Zápas se nepodařilo vytvořit.')
       return
     }
+
+    onMatchCreated?.(round)
 
     setNewMatch({
       round: '',
@@ -141,7 +163,10 @@ function AdminPanel({ matches, onMatchUpdated }) {
     let homeScore = null
     let awayScore = null
 
-    if (value.status === 'finished' || value.status === 'live') {
+    if (
+      value.status === 'finished' ||
+      value.status === 'live'
+    ) {
       homeScore = Number(value.home_score)
       awayScore = Number(value.away_score)
 

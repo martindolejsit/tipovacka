@@ -26,6 +26,7 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [selectedRound, setSelectedRound] = useState(4)
   const [availableRounds, setAvailableRounds] = useState([])
+  const [matchesRefreshKey, setMatchesRefreshKey] = useState(0)
 
   // =========================
   // AUTH
@@ -149,7 +150,7 @@ function App() {
     }
 
     loadData()
-}, [session, selectedRound])
+}, [session, selectedRound, matchesRefreshKey])
 
   // =========================
   // REGISTRACE
@@ -732,17 +733,26 @@ useEffect(() => {
       })}
 {isAdmin && (
   <AdminPanel
-    matches={matches}
-    onMatchUpdated={(updatedMatch) => {
-      setMatches((currentMatches) =>
-        currentMatches.map((match) =>
-          match.id === updatedMatch.id
-            ? updatedMatch
-            : match
-        )
+  matches={matches}
+  onMatchCreated={(round) => {
+    setAvailableRounds((currentRounds) => {
+      const rounds = [...new Set([...currentRounds, round])]
+      return rounds.sort((a, b) => a - b)
+    })
+
+    setSelectedRound(round)
+    setMatchesRefreshKey((current) => current + 1)
+  }}
+  onMatchUpdated={(updatedMatch) => {
+    setMatches((currentMatches) =>
+      currentMatches.map((match) =>
+        match.id === updatedMatch.id
+          ? updatedMatch
+          : match
       )
-    }}
-  />
+    )
+  }}
+/>
 )}
     </div>
   )
