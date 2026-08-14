@@ -24,9 +24,11 @@ function App() {
   const [leaderboard, setLeaderboard] = useState([])
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [selectedRound, setSelectedRound] = useState(4)
+  const [selectedRound, setSelectedRound] = useState(null)
+  const [roundManuallySelected, setRoundManuallySelected] = useState(false)
   const [availableRounds, setAvailableRounds] = useState([])
   const [matchesRefreshKey, setMatchesRefreshKey] = useState(0)
+  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0)
 
   // =========================
   // AUTH
@@ -52,7 +54,7 @@ function App() {
 
   useEffect(() => {
     async function loadData() {
-      if (!session) {
+      if (!session || selectedRound === null) {
         setMatches([])
         setTips({})
         return
@@ -219,7 +221,7 @@ useEffect(() => {
   }
 
   loadLeaderboard()
-}, [session])
+}, [session, leaderboardRefreshKey])
 
 useEffect(() => {
   async function loadAdminStatus() {
@@ -262,29 +264,123 @@ useEffect(() => {
 
     const { data, error } = await supabase
       .from('matches')
-      .select('round')
+      .select(`
+        round,
+        kickoff_at,
+        status
+      `)
       .eq('season_id', season.id)
       .order('round')
+      .order('kickoff_at')
 
     if (error) {
       console.error(error)
       return
     }
 
-    const rounds = [...new Set(data.map((match) => match.round))]
+    const rounds = [
+      ...new Set(data.map((match) => match.round)),
+    ].sort((a, b) => a - b)
 
     setAvailableRounds(rounds)
 
-    if (
-      rounds.length > 0 &&
-      !rounds.includes(selectedRound)
-    ) {
-      setSelectedRound(rounds[0])
+    if (rounds.length === 0) {
+      setSelectedRound(null)
+      return
     }
+
+    const now = Date.now()
+
+    // Počítáme cca 3 hodiny od začátku posledního
+    // zápasu kola, aby se během rozehraného kola
+    // aplikace nepřepnula předčasně na další.
+    const matchDurationBuffer = 3 * 60 * 60 * 1000
+
+    // Odložené a zrušené zápasy nebudou blokovat
+    // přechod na další kolo.
+    const usableMatches = data.filter(
+      (match) =>
+        match.status !== 'cancelled' &&
+        match.status !== 'postponed'
+    )
+
+    const roundInfo = rounds
+      .map((round) => {
+        const kickoffTimes = usableMatches
+          .filter((match) => match.round === round)
+          .map((match) =>
+            new Date(match.kickoff_at).getTime()
+          )
+          .filter((time) => Number.isFinite(time))
+          .sort((a, b) => a - b)
+
+        if (kickoffTimes.length === 0) {
+          return null
+        }
+
+        return {
+          round,
+          firstKickoff: kickoffTimes[0],
+          lastKickoff:
+            kickoffTimes[kickoffTimes.length - 1],
+        }
+      })
+      .filter(Boolean)
+
+    // Pokud je některý zápas označený jako LIVE,
+    // má jeho kolo absolutní přednost.
+    const liveRound = usableMatches
+      .filter((match) => match.status === 'live')
+      .map((match) => match.round)
+      .sort((a, b) => a - b)[0]
+
+    // Kolo právě probíhá od prvního výkopu
+    // do cca 3 hodin po posledním výkopu.
+    const activeRound = roundInfo.find(
+      (info) =>
+        now >= info.firstKickoff &&
+        now <= info.lastKickoff + matchDurationBuffer
+    )?.round
+
+    // Pokud se žádné kolo právě nehraje,
+    // najdeme nejbližší budoucí.
+    const nextRound = roundInfo.find(
+      (info) => info.firstKickoff > now
+    )?.round
+
+    // Pokud už sezóna skončila, zobrazíme poslední kolo.
+    const defaultRound =
+      liveRound ??
+      activeRound ??
+      nextRound ??
+      rounds[rounds.length - 1]
+
+    setSelectedRound((currentRound) => {
+      // Pokud si uživatel ručně vybral jiné existující
+      // kolo, necháme jeho volbu.
+      if (
+        roundManuallySelected &&
+        currentRound !== null &&
+        rounds.includes(currentRound)
+      ) {
+        return currentRound
+      }
+
+      return defaultRound
+    })
   }
 
   loadAvailableRounds()
-}, [matchesRefreshKey])
+
+  // Pokud by byla aplikace dlouho otevřená,
+  // každých 5 minut znovu zkontrolujeme aktuální kolo.
+  const interval = setInterval(
+    loadAvailableRounds,
+    5 * 60 * 1000
+  )
+
+  return () => clearInterval(interval)
+}, [matchesRefreshKey, roundManuallySelected])
 
   async function handleRegister(e) {
     e.preventDefault()
@@ -603,11 +699,16 @@ useEffect(() => {
 
 
 
-<h2>{selectedRound}. kolo</h2>
+{selectedRound !== null && (
+  <h2>{selectedRound}. kolo</h2>
+)}
 
 <select
-  value={selectedRound}
-  onChange={(e) => setSelectedRound(Number(e.target.value))}
+  value={selectedRound ?? ''}
+  onChange={(e) => {
+  setSelectedRound(Number(e.target.value))
+  setRoundManuallySelected(true)
+}}
 >
   {availableRounds.map((round) => (
     <option key={round} value={round}>
@@ -735,25 +836,19 @@ useEffect(() => {
   <AdminPanel
 matches={matches}
 
-  onMatchCreated={(round) => {
-    setAvailableRounds((currentRounds) => {
-      const rounds = [...new Set([...currentRounds, round])]
-      return rounds.sort((a, b) => a - b)
-    })
+onMatchCreated={(round) => {
+  setAvailableRounds((currentRounds) => {
+    const rounds = [
+      ...new Set([...currentRounds, round]),
+    ]
 
-    setSelectedRound(round)
-    setMatchesRefreshKey((current) => current + 1)
-  }}
+    return rounds.sort((a, b) => a - b)
+  })
 
-  onMatchUpdated={(updatedMatch) => {
-    setMatches((currentMatches) =>
-      currentMatches.map((match) =>
-        match.id === updatedMatch.id
-          ? updatedMatch
-          : match
-      )
-    )
-  }}
+  setRoundManuallySelected(true)
+  setSelectedRound(round)
+  setMatchesRefreshKey((current) => current + 1)
+}}
 
   onMatchDeleted={(matchId) => {
     setMatches((currentMatches) =>
@@ -763,6 +858,7 @@ matches={matches}
     )
 
     setMatchesRefreshKey((current) => current + 1)
+	setLeaderboardRefreshKey((current) => current + 1)
   }}
 />
 )}
