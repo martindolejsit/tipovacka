@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { stageOptions } from './stages'
 
 const statusOptions = [
   { value: 'scheduled', label: 'Naplánováno' },
@@ -11,6 +12,8 @@ const statusOptions = [
 
 function AdminPanel({
   matches,
+  selectedStage,
+  selectedRound,
   onMatchUpdated,
   onMatchCreated,
   onMatchDeleted,
@@ -20,7 +23,8 @@ function AdminPanel({
   const [activeSeasonId, setActiveSeasonId] = useState(null)
 
   const [newMatch, setNewMatch] = useState({
-    round: '',
+    stage: selectedStage ?? 'regular',
+    round: selectedRound?.toString() ?? '',
     home_team_id: '',
     away_team_id: '',
     date: '',
@@ -57,10 +61,21 @@ function AdminPanel({
   }, [matches])
 
   useEffect(() => {
+    setNewMatch((current) => ({
+      ...current,
+      stage: selectedStage ?? current.stage ?? 'regular',
+      round:
+        selectedRound !== null && selectedRound !== undefined
+          ? selectedRound.toString()
+          : current.round,
+    }))
+  }, [selectedStage, selectedRound])
+
+  useEffect(() => {
     async function loadAdminData() {
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
-        .select('id, name')
+        .select('id, name, short_name, logo_url')
         .order('name')
 
       if (teamsError) {
@@ -106,6 +121,7 @@ function AdminPanel({
     }
 
     if (
+      !newMatch.stage ||
       !newMatch.round ||
       !newMatch.home_team_id ||
       !newMatch.away_team_id ||
@@ -128,9 +144,7 @@ function AdminPanel({
       return
     }
 
-    const kickoff = new Date(
-      `${newMatch.date}T${newMatch.time}:00`
-    )
+    const kickoff = new Date(`${newMatch.date}T${newMatch.time}:00`)
 
     if (Number.isNaN(kickoff.getTime())) {
       setNewMatchMessage('Neplatné datum nebo čas.')
@@ -141,6 +155,7 @@ function AdminPanel({
       .from('matches')
       .insert({
         season_id: activeSeasonId,
+        stage: newMatch.stage,
         round,
         home_team_id: Number(newMatch.home_team_id),
         away_team_id: Number(newMatch.away_team_id),
@@ -154,10 +169,11 @@ function AdminPanel({
       return
     }
 
-    onMatchCreated?.(round)
+    onMatchCreated?.(newMatch.stage, round)
 
     setNewMatch({
-      round: '',
+      stage: newMatch.stage,
+      round: round.toString(),
       home_team_id: '',
       away_team_id: '',
       date: '',
@@ -311,279 +327,357 @@ function AdminPanel({
   }
 
   return (
-    <div>
-      <hr />
-
-      <h2>Administrace</h2>
-
-      <h3>Přidat nový zápas</h3>
-
-      <form onSubmit={createMatch}>
-        <div>
-          <label>
-            Kolo:
-            <br />
-            <input
-              type="number"
-              min="1"
-              value={newMatch.round}
-              onChange={(e) =>
-                setNewMatch({
-                  ...newMatch,
-                  round: e.target.value,
-                })
-              }
-              required
-            />
-          </label>
+    <div className="admin-panel">
+      <section className="admin-panel-section">
+        <div className="admin-panel-heading">
+          <div>
+            <span className="section-kicker">NOVÝ ZÁPAS</span>
+            <h2>Přidat nový zápas</h2>
+          </div>
         </div>
 
-        <br />
+        <form
+          className="match-card admin-create-match-card"
+          onSubmit={createMatch}
+        >
+          <div className="match-card-top admin-create-top">
+            <div className="admin-create-stage-round">
+              <label className="admin-inline-field admin-stage-field">
+                <span>Část soutěže</span>
+                <select
+                  value={newMatch.stage}
+                  onChange={(e) =>
+                    setNewMatch({
+                      ...newMatch,
+                      stage: e.target.value,
+                    })
+                  }
+                  required
+                >
+                  {stageOptions.map((stage) => (
+                    <option
+                      key={stage.value}
+                      value={stage.value}
+                    >
+                      {stage.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-        <div>
-          <label>
-            Domácí:
-            <br />
-            <select
-              value={newMatch.home_team_id}
-              onChange={(e) =>
-                setNewMatch({
-                  ...newMatch,
-                  home_team_id: e.target.value,
-                })
-              }
-              required
-            >
-              <option value="">Vyber tým</option>
+              <label className="admin-inline-field admin-round-field">
+                <span>Kolo</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={newMatch.round}
+                  onChange={(e) =>
+                    setNewMatch({
+                      ...newMatch,
+                      round: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </label>
+            </div>
 
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+            <span className="status-pill status-pill-scheduled">
+              Naplánováno
+            </span>
+          </div>
 
-        <br />
+          <div className="admin-new-teams">
+            <label className="admin-team-select">
+              <span>Domácí</span>
+              <select
+                value={newMatch.home_team_id}
+                onChange={(e) =>
+                  setNewMatch({
+                    ...newMatch,
+                    home_team_id: e.target.value,
+                  })
+                }
+                required
+              >
+                <option value="">Vyber tým</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <div>
-          <label>
-            Hosté:
-            <br />
-            <select
-              value={newMatch.away_team_id}
-              onChange={(e) =>
-                setNewMatch({
-                  ...newMatch,
-                  away_team_id: e.target.value,
-                })
-              }
-              required
-            >
-              <option value="">Vyber tým</option>
+            <span className="admin-vs">VS</span>
 
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+            <label className="admin-team-select">
+              <span>Hosté</span>
+              <select
+                value={newMatch.away_team_id}
+                onChange={(e) =>
+                  setNewMatch({
+                    ...newMatch,
+                    away_team_id: e.target.value,
+                  })
+                }
+                required
+              >
+                <option value="">Vyber tým</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-        <br />
-
-        <div>
-          <label>
-            Datum:
-            <br />
-            <input
-              type="date"
-              value={newMatch.date}
-              onChange={(e) =>
-                setNewMatch({
-                  ...newMatch,
-                  date: e.target.value,
-                })
-              }
-              required
-            />
-          </label>
-        </div>
-
-        <br />
-
-        <div>
-          <label>
-            Čas:
-            <br />
-            <input
-              type="time"
-              value={newMatch.time}
-              onChange={(e) =>
-                setNewMatch({
-                  ...newMatch,
-                  time: e.target.value,
-                })
-              }
-              required
-            />
-          </label>
-        </div>
-
-        <br />
-
-        <button type="submit">
-          Přidat zápas
-        </button>
-
-        {newMatchMessage && (
-          <p>{newMatchMessage}</p>
-        )}
-      </form>
-
-      <hr />
-
-      {matches.map((match) => {
-        const value = values[match.id]
-
-        if (!value) return null
-
-        return (
-          <div key={match.id}>
-            <h3>
-              {match.home_team.name}
-              {' – '}
-              {match.away_team.name}
-            </h3>
-
-            <div>
-              <label>
-                Datum:
-                <br />
+          <div className="admin-match-footer">
+            <div className="admin-datetime-fields">
+              <label className="admin-compact-field">
+                <span>Datum</span>
                 <input
                   type="date"
-                  value={value.date}
+                  value={newMatch.date}
                   onChange={(e) =>
-                    changeValue(
-                      match.id,
-                      'date',
-                      e.target.value
-                    )
+                    setNewMatch({
+                      ...newMatch,
+                      date: e.target.value,
+                    })
                   }
+                  required
                 />
               </label>
-            </div>
 
-            <br />
-
-            <div>
-              <label>
-                Čas:
-                <br />
+              <label className="admin-compact-field">
+                <span>Čas</span>
                 <input
                   type="time"
-                  value={value.time}
+                  value={newMatch.time}
                   onChange={(e) =>
-                    changeValue(
-                      match.id,
-                      'time',
-                      e.target.value
-                    )
+                    setNewMatch({
+                      ...newMatch,
+                      time: e.target.value,
+                    })
                   }
+                  required
                 />
               </label>
             </div>
 
-            <br />
+            <button className="admin-save-button" type="submit">
+              Přidat zápas
+            </button>
+          </div>
 
-            <div>
-              <input
-                type="number"
-                min="0"
-                value={value.home_score}
-                onChange={(e) =>
-                  changeValue(
-                    match.id,
-                    'home_score',
-                    e.target.value
-                  )
-                }
-                style={{ width: '60px' }}
-              />
-
-              <strong> : </strong>
-
-              <input
-                type="number"
-                min="0"
-                value={value.away_score}
-                onChange={(e) =>
-                  changeValue(
-                    match.id,
-                    'away_score',
-                    e.target.value
-                  )
-                }
-                style={{ width: '60px' }}
-              />
-            </div>
-
-            <br />
-
-            <select
-              value={value.status}
-              onChange={(e) =>
-                changeValue(
-                  match.id,
-                  'status',
-                  e.target.value
-                )
+          {newMatchMessage && (
+            <p
+              className={
+                newMatchMessage.includes('✓')
+                  ? 'admin-card-message success'
+                  : 'admin-card-message error'
               }
             >
-              {statusOptions.map((status) => (
-                <option
-                  key={status.value}
-                  value={status.value}
-                >
-                  {status.label}
-                </option>
-              ))}
-            </select>
+              {newMatchMessage}
+            </p>
+          )}
+        </form>
+      </section>
 
-            <br />
-            <br />
-
-            <button
-              onClick={() => saveResult(match)}
-              disabled={value.saving || value.deleting}
-            >
-              {value.saving
-                ? 'Ukládám...'
-                : 'Uložit změny'}
-            </button>
-
-            {' '}
-
-            <button
-              type="button"
-              onClick={() => deleteMatch(match)}
-              disabled={value.saving || value.deleting}
-            >
-              {value.deleting
-                ? 'Mažu...'
-                : 'Smazat zápas'}
-            </button>
-
-            {value.message && (
-              <p>{value.message}</p>
-            )}
-
-            <hr />
+      <section className="admin-panel-section">
+        <div className="admin-panel-heading">
+          <div>
+            <span className="section-kicker">ZÁPASY KOLA</span>
+            <h2>Upravit zápasy</h2>
           </div>
-        )
-      })}
+
+          <span className="section-meta">
+            {matches.length} zápasů
+          </span>
+        </div>
+
+        <div className="admin-matches-grid">
+          {matches.map((match) => {
+            const value = values[match.id]
+
+            if (!value) return null
+
+            return (
+              <article
+                key={match.id}
+                className={`match-card admin-match-card status-${value.status}`}
+              >
+                <div className="match-card-top admin-edit-top">
+                  <div className="admin-datetime-fields admin-datetime-fields-top">
+                    <input
+                      aria-label="Datum zápasu"
+                      type="date"
+                      value={value.date}
+                      onChange={(e) =>
+                        changeValue(
+                          match.id,
+                          'date',
+                          e.target.value
+                        )
+                      }
+                    />
+
+                    <input
+                      aria-label="Čas zápasu"
+                      type="time"
+                      value={value.time}
+                      onChange={(e) =>
+                        changeValue(
+                          match.id,
+                          'time',
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+
+                  <select
+                    className={`admin-status-select status-select-${value.status}`}
+                    value={value.status}
+                    onChange={(e) =>
+                      changeValue(
+                        match.id,
+                        'status',
+                        e.target.value
+                      )
+                    }
+                    aria-label="Stav zápasu"
+                  >
+                    {statusOptions.map((status) => (
+                      <option
+                        key={status.value}
+                        value={status.value}
+                      >
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="teams admin-teams">
+                  <div className="team team-home">
+                    {match.home_team.logo_url ? (
+                      <img
+                        className="team-logo"
+                        src={match.home_team.logo_url}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="team-code">
+                        {match.home_team.short_name}
+                      </span>
+                    )}
+                    <strong>{match.home_team.name}</strong>
+                  </div>
+
+                  <div className="versus">
+                    <span>VS</span>
+                  </div>
+
+                  <div className="team team-away">
+                    {match.away_team.logo_url ? (
+                      <img
+                        className="team-logo"
+                        src={match.away_team.logo_url}
+                        alt=""
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="team-code">
+                        {match.away_team.short_name}
+                      </span>
+                    )}
+                    <strong>{match.away_team.name}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-match-footer">
+                  <div className="admin-score-editor">
+                    <span className="admin-control-label">
+                      Výsledek
+                    </span>
+
+                    <div className="score-inputs">
+                      <input
+                        type="number"
+                        min="0"
+                        value={value.home_score}
+                        onChange={(e) =>
+                          changeValue(
+                            match.id,
+                            'home_score',
+                            e.target.value
+                          )
+                        }
+                        aria-label={`Výsledek ${match.home_team.name}`}
+                      />
+
+                      <strong>:</strong>
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={value.away_score}
+                        onChange={(e) =>
+                          changeValue(
+                            match.id,
+                            'away_score',
+                            e.target.value
+                          )
+                        }
+                        aria-label={`Výsledek ${match.away_team.name}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="admin-card-actions">
+                    <button
+                      className="admin-save-button"
+                      type="button"
+                      onClick={() => saveResult(match)}
+                      disabled={value.saving || value.deleting}
+                    >
+                      {value.saving
+                        ? 'Ukládám…'
+                        : 'Uložit změny'}
+                    </button>
+
+                    <button
+                      className="admin-delete-button"
+                      type="button"
+                      onClick={() => deleteMatch(match)}
+                      disabled={value.saving || value.deleting}
+                    >
+                      {value.deleting
+                        ? 'Mažu…'
+                        : 'Smazat'}
+                    </button>
+                  </div>
+                </div>
+
+                {value.message && (
+                  <p
+                    className={
+                      value.message.includes('✓')
+                        ? 'admin-card-message success'
+                        : 'admin-card-message error'
+                    }
+                  >
+                    {value.message}
+                  </p>
+                )}
+              </article>
+            )
+          })}
+        </div>
+      </section>
     </div>
   )
 }
