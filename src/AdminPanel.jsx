@@ -10,6 +10,20 @@ const statusOptions = [
   { value: 'cancelled', label: 'Zrušeno' },
 ]
 
+function emptyPredictionValue() {
+  return {
+    user_id: '',
+    prediction_id: null,
+    home_score: '',
+    away_score: '',
+    points: null,
+    existing: false,
+    loading: false,
+    saving: false,
+    message: '',
+  }
+}
+
 function AdminPanel({
   matches,
   selectedStage,
@@ -19,7 +33,9 @@ function AdminPanel({
   onMatchDeleted,
 }) {
   const [values, setValues] = useState({})
+  const [predictionValues, setPredictionValues] = useState({})
   const [teams, setTeams] = useState([])
+  const [players, setPlayers] = useState([])
   const [activeSeasonId, setActiveSeasonId] = useState(null)
 
   const [newMatch, setNewMatch] = useState({
@@ -61,6 +77,19 @@ function AdminPanel({
   }, [matches])
 
   useEffect(() => {
+    setPredictionValues((current) => {
+      const next = {}
+
+      matches.forEach((match) => {
+        next[match.id] =
+          current[match.id] ?? emptyPredictionValue()
+      })
+
+      return next
+    })
+  }, [matches])
+
+  useEffect(() => {
     setNewMatch((current) => ({
       ...current,
       stage: selectedStage ?? current.stage ?? 'regular',
@@ -82,6 +111,22 @@ function AdminPanel({
         console.error(teamsError)
       } else {
         setTeams(teamsData ?? [])
+      }
+
+      const { data: playersData, error: playersError } =
+        await supabase
+          .from('profiles')
+          .select('id, display_name')
+          .order('display_name')
+
+      if (playersError) {
+        console.error(playersError)
+      } else {
+        setPlayers(
+          (playersData ?? []).filter(
+            (player) => player.display_name?.trim()
+          )
+        )
       }
 
       const { data: seasonData, error: seasonError } = await supabase
@@ -106,6 +151,82 @@ function AdminPanel({
       [matchId]: {
         ...current[matchId],
         [field]: value,
+        message: '',
+      },
+    }))
+  }
+
+  function changePredictionValue(matchId, field, value) {
+    setPredictionValues((current) => ({
+      ...current,
+      [matchId]: {
+        ...(current[matchId] ?? emptyPredictionValue()),
+        [field]: value,
+        message: '',
+      },
+    }))
+  }
+
+  async function selectPredictionPlayer(matchId, userId) {
+    if (!userId) {
+      setPredictionValues((current) => ({
+        ...current,
+        [matchId]: emptyPredictionValue(),
+      }))
+      return
+    }
+
+    setPredictionValues((current) => ({
+      ...current,
+      [matchId]: {
+        ...(current[matchId] ?? emptyPredictionValue()),
+        user_id: userId,
+        prediction_id: null,
+        home_score: '',
+        away_score: '',
+        points: null,
+        existing: false,
+        loading: true,
+        saving: false,
+        message: '',
+      },
+    }))
+
+    const { data, error } = await supabase
+      .from('predictions')
+      .select('id, home_score, away_score, points')
+      .eq('match_id', matchId)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (error) {
+      console.error(error)
+
+      setPredictionValues((current) => ({
+        ...current,
+        [matchId]: {
+          ...(current[matchId] ?? emptyPredictionValue()),
+          user_id: userId,
+          loading: false,
+          message: 'Tip hráče se nepodařilo načíst.',
+        },
+      }))
+
+      return
+    }
+
+    setPredictionValues((current) => ({
+      ...current,
+      [matchId]: {
+        ...(current[matchId] ?? emptyPredictionValue()),
+        user_id: userId,
+        prediction_id: data?.id ?? null,
+        home_score: data?.home_score ?? '',
+        away_score: data?.away_score ?? '',
+        points: data?.points ?? null,
+        existing: Boolean(data),
+        loading: false,
+        saving: false,
         message: '',
       },
     }))
@@ -206,11 +327,7 @@ function AdminPanel({
         homeScore < 0 ||
         awayScore < 0
       ) {
-        changeValue(
-          match.id,
-          'message',
-          'Zadej platné skóre.'
-        )
+        changeValue(match.id, 'message', 'Zadej platné skóre.')
         return
       }
     }
@@ -285,6 +402,110 @@ function AdminPanel({
       status: value.status,
       kickoff_at: kickoff.toISOString(),
     })
+  }
+
+  async function savePrediction(match) {
+    const prediction =
+      predictionValues[match.id] ?? emptyPredictionValue()
+
+    if (!prediction.user_id) {
+      changePredictionValue(
+        match.id,
+        'message',
+        'Nejdřív vyber hráče.'
+      )
+      return
+    }
+
+    const homeScore = Number(prediction.home_score)
+    const awayScore = Number(prediction.away_score)
+
+    if (
+      prediction.home_score === '' ||
+      prediction.away_score === '' ||
+      !Number.isInteger(homeScore) ||
+      !Number.isInteger(awayScore) ||
+      homeScore < 0 ||
+      awayScore < 0
+    ) {
+      changePredictionValue(
+        match.id,
+        'message',
+        'Zadej platný tip.'
+      )
+      return
+    }
+
+    setPredictionValues((current) => ({
+      ...current,
+      [match.id]: {
+        ...(current[match.id] ?? emptyPredictionValue()),
+        saving: true,
+        message: '',
+      },
+    }))
+
+    let data
+    let error
+
+    if (prediction.prediction_id) {
+      const response = await supabase
+        .from('predictions')
+        .update({
+          home_score: homeScore,
+          away_score: awayScore,
+        })
+        .eq('id', prediction.prediction_id)
+        .select('id, home_score, away_score, points')
+        .single()
+
+      data = response.data
+      error = response.error
+    } else {
+      const response = await supabase
+        .from('predictions')
+        .insert({
+          match_id: match.id,
+          user_id: prediction.user_id,
+          home_score: homeScore,
+          away_score: awayScore,
+        })
+        .select('id, home_score, away_score, points')
+        .single()
+
+      data = response.data
+      error = response.error
+    }
+
+    if (error) {
+      console.error(error)
+
+      setPredictionValues((current) => ({
+        ...current,
+        [match.id]: {
+          ...(current[match.id] ?? emptyPredictionValue()),
+          saving: false,
+          message: 'Tip se nepodařilo uložit.',
+        },
+      }))
+
+      return
+    }
+
+    setPredictionValues((current) => ({
+      ...current,
+      [match.id]: {
+        ...(current[match.id] ?? emptyPredictionValue()),
+        prediction_id: data.id,
+        home_score: data.home_score,
+        away_score: data.away_score,
+        points: data.points,
+        existing: true,
+        loading: false,
+        saving: false,
+        message: 'Tip uložen ✓',
+      },
+    }))
   }
 
   async function deleteMatch(match) {
@@ -489,7 +710,7 @@ function AdminPanel({
         <div className="admin-panel-heading">
           <div>
             <span className="section-kicker">ZÁPASY KOLA</span>
-            <h2>Upravit zápasy</h2>
+            <h2>Upravit zápasy a tipy</h2>
           </div>
 
           <span className="section-meta">
@@ -500,8 +721,14 @@ function AdminPanel({
         <div className="admin-matches-grid">
           {matches.map((match) => {
             const value = values[match.id]
+            const prediction =
+              predictionValues[match.id] ??
+              emptyPredictionValue()
 
             if (!value) return null
+
+            const kickoffPassed =
+              new Date(match.kickoff_at).getTime() <= Date.now()
 
             return (
               <article
@@ -673,6 +900,140 @@ function AdminPanel({
                     {value.message}
                   </p>
                 )}
+
+                <div className="admin-prediction-editor">
+                  <div className="admin-prediction-heading">
+                    <div>
+                      <span className="admin-control-label">
+                        Tip za hráče
+                      </span>
+                      <strong>Administrátorský tip</strong>
+                    </div>
+
+                    <div className="admin-prediction-badges">
+                      {kickoffPassed && (
+                        <span className="admin-after-kickoff-warning">
+                          Po výkopu – admin override
+                        </span>
+                      )}
+
+                      {prediction.existing && (
+                        <span className="admin-existing-tip-badge">
+                          Existující tip
+                          {prediction.points !== null
+                            ? ` · ${prediction.points} b`
+                            : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="admin-prediction-controls">
+                    <label className="admin-player-field">
+                      <span>Hráč</span>
+                      <select
+                        value={prediction.user_id}
+                        onChange={(e) =>
+                          selectPredictionPlayer(
+                            match.id,
+                            e.target.value
+                          )
+                        }
+                        disabled={
+                          prediction.loading ||
+                          prediction.saving
+                        }
+                      >
+                        <option value="">Vyber hráče</option>
+                        {players.map((player) => (
+                          <option
+                            key={player.id}
+                            value={player.id}
+                          >
+                            {player.display_name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="admin-prediction-score">
+                      <span>Tip</span>
+
+                      <div className="admin-prediction-score-inputs">
+                        <input
+                          type="number"
+                          min="0"
+                          value={prediction.home_score}
+                          onChange={(e) =>
+                            changePredictionValue(
+                              match.id,
+                              'home_score',
+                              e.target.value
+                            )
+                          }
+                          disabled={
+                            !prediction.user_id ||
+                            prediction.loading ||
+                            prediction.saving
+                          }
+                          aria-label={`Tip hráče - ${match.home_team.name}`}
+                        />
+
+                        <strong>:</strong>
+
+                        <input
+                          type="number"
+                          min="0"
+                          value={prediction.away_score}
+                          onChange={(e) =>
+                            changePredictionValue(
+                              match.id,
+                              'away_score',
+                              e.target.value
+                            )
+                          }
+                          disabled={
+                            !prediction.user_id ||
+                            prediction.loading ||
+                            prediction.saving
+                          }
+                          aria-label={`Tip hráče - ${match.away_team.name}`}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      className="admin-tip-save-button"
+                      type="button"
+                      onClick={() => savePrediction(match)}
+                      disabled={
+                        !prediction.user_id ||
+                        prediction.loading ||
+                        prediction.saving
+                      }
+                    >
+                      {prediction.loading
+                        ? 'Načítám…'
+                        : prediction.saving
+                          ? 'Ukládám…'
+                          : prediction.existing
+                            ? 'Upravit tip'
+                            : 'Uložit tip'}
+                    </button>
+                  </div>
+
+                  {prediction.message && (
+                    <p
+                      className={
+                        prediction.message.includes('✓')
+                          ? 'admin-prediction-message success'
+                          : 'admin-prediction-message error'
+                      }
+                    >
+                      {prediction.message}
+                    </p>
+                  )}
+                </div>
               </article>
             )
           })}

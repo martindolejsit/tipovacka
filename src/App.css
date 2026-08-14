@@ -2028,3 +2028,236 @@
   }
 }
 
+/* =========================
+   ADMIN - TIPY ZA HRÁČE
+   ========================= */
+
+.admin-prediction-editor {
+  padding: 16px 18px 18px;
+  border-top: 1px solid var(--border);
+  background: #fbfcfd;
+}
+
+.admin-prediction-heading {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-prediction-heading > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.admin-prediction-heading strong {
+  color: var(--heading);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.admin-prediction-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.admin-after-kickoff-warning,
+.admin-existing-tip-badge {
+  min-height: 26px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+
+.admin-after-kickoff-warning {
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
+.admin-existing-tip-badge {
+  border: 1px solid var(--accent-border);
+  color: #385314;
+  background: var(--accent-soft);
+}
+
+.admin-prediction-controls {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.admin-player-field,
+.admin-prediction-score {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.admin-player-field > span,
+.admin-prediction-score > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.admin-player-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  box-sizing: border-box;
+  padding: 0 34px 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--heading);
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-prediction-score-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-prediction-score-inputs input {
+  width: 50px;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  color: var(--heading);
+  background: var(--surface);
+  text-align: center;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.admin-prediction-score-inputs input:focus,
+.admin-player-field select:focus {
+  border-color: var(--accent-border);
+  outline: 3px solid var(--accent-soft);
+}
+
+.admin-prediction-score-inputs input:disabled,
+.admin-player-field select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-prediction-score-inputs strong {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.admin-tip-save-button {
+  min-width: 104px;
+  min-height: 42px !important;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  color: #101828 !important;
+  background: var(--accent) !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  white-space: nowrap;
+}
+
+.admin-tip-save-button:hover:not(:disabled) {
+  background: var(--accent-hover) !important;
+}
+
+.admin-tip-save-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+.admin-prediction-message {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.admin-prediction-message.success {
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+.admin-prediction-message.error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+@media (max-width: 720px) {
+  .admin-prediction-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-player-field {
+    grid-column: 1 / -1;
+  }
+
+  .admin-tip-save-button {
+    min-width: 120px;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-prediction-editor {
+    padding: 14px 12px;
+  }
+
+  .admin-prediction-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-prediction-badges {
+    justify-content: flex-start;
+  }
+
+  .admin-prediction-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .admin-player-field,
+  .admin-prediction-score,
+  .admin-tip-save-button {
+    width: 100%;
+  }
+
+  .admin-prediction-score-inputs {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  }
+
+  .admin-prediction-score-inputs input {
+    width: 100%;
+  }
+
+  .admin-tip-save-button {
+    min-width: 0;
+    width: 100%;
+  }
+}
