@@ -1,5 +1,6 @@
 import AdminPanel from './AdminPanel'
 import { stageOptions } from './stages'
+import Topbar from './Topbar'
 
 function AdminPage({
   session,
@@ -77,48 +78,14 @@ function AdminPage({
 
   return (
     <div className="app-page admin-page">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="brand">
-            <img
-              className="brand-logo"
-              src="/logo.png"
-              alt="Tipovačka"
-            />
-            <div>
-              <span className="brand-kicker">CHANCE LIGA</span>
-              <strong>Administrace</strong>
-            </div>
-          </div>
-
-          <div className="user-menu">
-            <div className="user-copy">
-              <span>Administrátor</span>
-              <strong>
-                {currentUserName || session.user.email}
-              </strong>
-            </div>
-
-            <a className="ghost-button nav-link-button" href="/">
-              Tipovačka
-            </a>
-
-            <a
-              className="ghost-button nav-link-button"
-              href="/results"
-            >
-              Výsledky
-            </a>
-
-            <button
-              className="ghost-button"
-              onClick={onLogout}
-            >
-              Odhlásit
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar
+        page="admin"
+        title="Administrace"
+        session={session}
+        currentUserName={currentUserName}
+        isAdmin={isAdmin}
+        onLogout={onLogout}
+      />
 
       <main className="main-shell admin-main-shell">
         <section className="admin-heading-card">

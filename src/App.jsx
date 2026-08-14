@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import AdminPage from './AdminPage'
 import ResultsPage from './ResultsPage'
+import Topbar from './Topbar'
 import './App.css'
 import { getStageOrder, stageLabels, stageOptions } from './stages'
 
@@ -700,10 +701,12 @@ function App() {
     return (
       <div className="auth-page">
         <div className="auth-shell">
-		<img className="brand-logo-auth" src="/logo.png" alt="Tipovačka" />
           <div className="auth-brand">
             <span className="brand-kicker">FOTBALOVÁ TIPOVAČKA</span>
             <h1>Chance Liga</h1>
+            <p>
+              Tipuj výsledky, sbírej body a porovnej se s ostatními.
+            </p>
           </div>
 
           <div className="auth-grid">
@@ -861,59 +864,21 @@ function App() {
 
   return (
     <div className="app-page">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="brand">
-            <img className="brand-logo" src="/logo.png" alt="Tipovačka" />
-            <div>
-              <span className="brand-kicker">CHANCE LIGA</span>
-              <strong>Tipovačka</strong>
-            </div>
-          </div>
-
-          <div className="user-menu">
-            <div className="user-copy">
-              <span>Přihlášen:</span>
-              <strong>
-                {currentUserName || session.user.email}
-              </strong>
-            </div>
-
-            <a
-              className="ghost-button nav-link-button"
-              href="/results"
-            >
-              Výsledky
-            </a>
-
-            {isAdmin && (
-              <>
-                <span className="admin-badge">ADMIN</span>
-                <a
-                  className="ghost-button nav-link-button"
-                  href="/admin"
-                >
-                  Administrace
-                </a>
-              </>
-            )}
-
-            <button
-              className="ghost-button"
-              onClick={handleLogout}
-            >
-              Odhlásit
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar
+        page="home"
+        title="Tipovačka"
+        session={session}
+        currentUserName={currentUserName}
+        isAdmin={isAdmin}
+        onLogout={handleLogout}
+      />
 
       <main className="main-shell">
         <section className="leaderboard-card">
           <div className="section-heading">
             <div>
-              <h2 className="section-kicker">CELKOVÉ POŘADÍ</h2>
-              
+              <span className="section-kicker">CELKOVÉ POŘADÍ</span>
+              <h2>Leaderboard</h2>
             </div>
 
             <span className="section-meta">

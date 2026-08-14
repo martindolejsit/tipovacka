@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { getStageOrder, stageLabels, stageOptions } from './stages'
+import Topbar from './Topbar'
 
 const pointLabels = {
   5: 'Přesný tip',
@@ -348,53 +349,14 @@ function ResultsPage({
 
   return (
     <div className="app-page results-page">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <a className="brand brand-link" href="/">
-            <img
-              className="brand-logo"
-              src="/logo.png"
-              alt="Tipovačka"
-            />
-            <div>
-              <span className="brand-kicker">CHANCE LIGA</span>
-              <strong>Výsledky tipování</strong>
-            </div>
-          </a>
-
-          <div className="user-menu">
-            <div className="user-copy">
-              <span>Přihlášen:</span>
-              <strong>
-                {currentUserName || session.user.email}
-              </strong>
-            </div>
-
-            <a
-              className="ghost-button nav-link-button"
-              href="/"
-            >
-              Tipovačka
-            </a>
-
-            {isAdmin && (
-              <a
-                className="ghost-button nav-link-button"
-                href="/admin"
-              >
-                Administrace
-              </a>
-            )}
-
-            <button
-              className="ghost-button"
-              onClick={onLogout}
-            >
-              Odhlásit
-            </button>
-          </div>
-        </div>
-      </header>
+      <Topbar
+        page="results"
+        title="Výsledky tipování"
+        session={session}
+        currentUserName={currentUserName}
+        isAdmin={isAdmin}
+        onLogout={onLogout}
+      />
 
       <main className="main-shell results-main-shell">
         <section className="results-heading-card">
@@ -403,7 +365,10 @@ function ResultsPage({
               HISTORIE TIPŮ
             </span>
             <h1>Výsledky tipování</h1>
-           
+            <p>
+              Po dohrání zápasu jsou vidět tipy všech hráčů,
+              skutečný výsledek i získané body.
+            </p>
           </div>
         </section>
 
