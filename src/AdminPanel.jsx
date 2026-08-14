@@ -13,6 +13,7 @@ function AdminPanel({
   matches,
   onMatchUpdated,
   onMatchCreated,
+  onMatchDeleted,
 }) {
   const [values, setValues] = useState({})
   const [teams, setTeams] = useState([])
@@ -32,11 +33,22 @@ function AdminPanel({
     const initialValues = {}
 
     matches.forEach((match) => {
+      const kickoff = new Date(match.kickoff_at)
+
+      const year = kickoff.getFullYear()
+      const month = String(kickoff.getMonth() + 1).padStart(2, '0')
+      const day = String(kickoff.getDate()).padStart(2, '0')
+      const hours = String(kickoff.getHours()).padStart(2, '0')
+      const minutes = String(kickoff.getMinutes()).padStart(2, '0')
+
       initialValues[match.id] = {
         home_score: match.home_score ?? '',
         away_score: match.away_score ?? '',
         status: match.status,
+        date: `${year}-${month}-${day}`,
+        time: `${hours}:${minutes}`,
         saving: false,
+        deleting: false,
         message: '',
       }
     })
@@ -187,6 +199,26 @@ function AdminPanel({
       }
     }
 
+    if (!value.date || !value.time) {
+      changeValue(
+        match.id,
+        'message',
+        'Vyplň datum a čas zápasu.'
+      )
+      return
+    }
+
+    const kickoff = new Date(`${value.date}T${value.time}:00`)
+
+    if (Number.isNaN(kickoff.getTime())) {
+      changeValue(
+        match.id,
+        'message',
+        'Neplatné datum nebo čas.'
+      )
+      return
+    }
+
     setValues((current) => ({
       ...current,
       [match.id]: {
@@ -202,6 +234,7 @@ function AdminPanel({
         home_score: homeScore,
         away_score: awayScore,
         status: value.status,
+        kickoff_at: kickoff.toISOString(),
       })
       .eq('id', match.id)
 
@@ -234,7 +267,47 @@ function AdminPanel({
       home_score: homeScore,
       away_score: awayScore,
       status: value.status,
+      kickoff_at: kickoff.toISOString(),
     })
+  }
+
+  async function deleteMatch(match) {
+    const confirmed = window.confirm(
+      `Opravdu chceš smazat zápas ${match.home_team.name} – ${match.away_team.name}?`
+    )
+
+    if (!confirmed) return
+
+    setValues((current) => ({
+      ...current,
+      [match.id]: {
+        ...current[match.id],
+        deleting: true,
+        message: '',
+      },
+    }))
+
+    const { error } = await supabase
+      .from('matches')
+      .delete()
+      .eq('id', match.id)
+
+    if (error) {
+      console.error(error)
+
+      setValues((current) => ({
+        ...current,
+        [match.id]: {
+          ...current[match.id],
+          deleting: false,
+          message: 'Zápas se nepodařilo smazat.',
+        },
+      }))
+
+      return
+    }
+
+    onMatchDeleted?.(match.id, match.round)
   }
 
   return (
@@ -386,6 +459,46 @@ function AdminPanel({
             </h3>
 
             <div>
+              <label>
+                Datum:
+                <br />
+                <input
+                  type="date"
+                  value={value.date}
+                  onChange={(e) =>
+                    changeValue(
+                      match.id,
+                      'date',
+                      e.target.value
+                    )
+                  }
+                />
+              </label>
+            </div>
+
+            <br />
+
+            <div>
+              <label>
+                Čas:
+                <br />
+                <input
+                  type="time"
+                  value={value.time}
+                  onChange={(e) =>
+                    changeValue(
+                      match.id,
+                      'time',
+                      e.target.value
+                    )
+                  }
+                />
+              </label>
+            </div>
+
+            <br />
+
+            <div>
               <input
                 type="number"
                 min="0"
@@ -444,11 +557,23 @@ function AdminPanel({
 
             <button
               onClick={() => saveResult(match)}
-              disabled={value.saving}
+              disabled={value.saving || value.deleting}
             >
               {value.saving
                 ? 'Ukládám...'
-                : 'Uložit výsledek'}
+                : 'Uložit změny'}
+            </button>
+
+            {' '}
+
+            <button
+              type="button"
+              onClick={() => deleteMatch(match)}
+              disabled={value.saving || value.deleting}
+            >
+              {value.deleting
+                ? 'Mažu...'
+                : 'Smazat zápas'}
             </button>
 
             {value.message && (

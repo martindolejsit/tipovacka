@@ -284,7 +284,7 @@ useEffect(() => {
   }
 
   loadAvailableRounds()
-}, [])
+}, [matchesRefreshKey])
 
   async function handleRegister(e) {
     e.preventDefault()
@@ -733,7 +733,8 @@ useEffect(() => {
       })}
 {isAdmin && (
   <AdminPanel
-  matches={matches}
+matches={matches}
+
   onMatchCreated={(round) => {
     setAvailableRounds((currentRounds) => {
       const rounds = [...new Set([...currentRounds, round])]
@@ -743,6 +744,7 @@ useEffect(() => {
     setSelectedRound(round)
     setMatchesRefreshKey((current) => current + 1)
   }}
+
   onMatchUpdated={(updatedMatch) => {
     setMatches((currentMatches) =>
       currentMatches.map((match) =>
@@ -751,6 +753,16 @@ useEffect(() => {
           : match
       )
     )
+  }}
+
+  onMatchDeleted={(matchId) => {
+    setMatches((currentMatches) =>
+      currentMatches.filter(
+        (match) => match.id !== matchId
+      )
+    )
+
+    setMatchesRefreshKey((current) => current + 1)
   }}
 />
 )}
