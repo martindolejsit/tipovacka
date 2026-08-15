@@ -701,12 +701,15 @@ function App() {
     return (
       <div className="auth-page">
         <div className="auth-shell">
+		<img
+              className="brand-logo-auth"
+              src="/logo.png"
+              alt="Tipovačka"
+            />
           <div className="auth-brand">
             <span className="brand-kicker">FOTBALOVÁ TIPOVAČKA</span>
             <h1>Chance Liga</h1>
-            <p>
-              Tipuj výsledky, sbírej body a porovnej se s ostatními.
-            </p>
+            
           </div>
 
           <div className="auth-grid">
@@ -877,8 +880,8 @@ function App() {
         <section className="leaderboard-card">
           <div className="section-heading">
             <div>
-              <span className="section-kicker">CELKOVÉ POŘADÍ</span>
-              <h2>Leaderboard</h2>
+              <h2>CELKOVÉ POŘADÍ</h2>
+              
             </div>
 
             <span className="section-meta">
