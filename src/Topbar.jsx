@@ -46,6 +46,11 @@ function Topbar({
       label: 'Výsledky',
       href: '/results',
     },
+    {
+      key: 'profile',
+      label: 'Profil',
+      href: '/profile',
+    },
     ...(isAdmin
       ? [
           {
@@ -178,19 +183,6 @@ function Topbar({
                 <span className="mobile-menu-arrow">↗</span>
               </a>
             ))}
-
-            <div
-              className="mobile-menu-link mobile-menu-link-disabled"
-              aria-disabled="true"
-            >
-              <span className="mobile-menu-number">
-                {String(navItems.length + 1).padStart(2, '0')}
-              </span>
-              <span>Profil</span>
-              <span className="mobile-menu-coming-soon">
-                BRZY
-              </span>
-            </div>
           </nav>
         </div>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import AdminPage from './AdminPage'
 import ResultsPage from './ResultsPage'
+import ProfilePage from './ProfilePage'
 import Topbar from './Topbar'
 import './App.css'
 import { getStageOrder, stageLabels, stageOptions } from './stages'
@@ -803,6 +804,19 @@ function App() {
 
   const isAdminPage = window.location.pathname === '/admin'
   const isResultsPage = window.location.pathname === '/results'
+  const isProfilePage = window.location.pathname === '/profile'
+
+  if (isProfilePage) {
+    return (
+      <ProfilePage
+        session={session}
+        currentUserName={currentUserName}
+        isAdmin={isAdmin}
+        onLogout={handleLogout}
+        onProfileUpdated={setCurrentUserName}
+      />
+    )
+  }
 
   if (isResultsPage) {
     return (
