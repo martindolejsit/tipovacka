@@ -15,7 +15,6 @@ const statusLabels = {
   cancelled: 'Zrušeno',
 }
 
-const rankLabels = ['🥇', '🥈', '🥉']
 
 function App() {
   const [session, setSession] = useState(null)
@@ -28,8 +27,6 @@ function App() {
   const [matches, setMatches] = useState([])
   const [tips, setTips] = useState({})
   const [loadingMatches, setLoadingMatches] = useState(true)
-  const [leaderboard, setLeaderboard] = useState([])
-  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [adminStatusLoaded, setAdminStatusLoaded] = useState(false)
   const [currentUserName, setCurrentUserName] = useState('')
@@ -38,7 +35,6 @@ function App() {
   const [selectionManuallyChanged, setSelectionManuallyChanged] = useState(false)
   const [availableSelections, setAvailableSelections] = useState([])
   const [matchesRefreshKey, setMatchesRefreshKey] = useState(0)
-  const [leaderboardRefreshKey, setLeaderboardRefreshKey] = useState(0)
 
   // =========================
   // AUTH
@@ -167,76 +163,6 @@ function App() {
 
     loadData()
   }, [session, selectedStage, selectedRound, matchesRefreshKey])
-
-  // =========================
-  // LEADERBOARD
-  // =========================
-
-  useEffect(() => {
-    async function loadLeaderboard() {
-      if (!session) {
-        setLeaderboard([])
-        return
-      }
-
-      setLoadingLeaderboard(true)
-
-      const { data: totals, error: totalsError } = await supabase
-        .from('leaderboard_totals')
-        .select(`
-          user_id,
-          total_points,
-          exact_tips,
-          correct_tips,
-          tip_count
-        `)
-        .order('total_points', { ascending: false })
-        .order('exact_tips', { ascending: false })
-
-      if (totalsError) {
-        console.error(totalsError)
-        setLoadingLeaderboard(false)
-        return
-      }
-
-      const userIds = totals.map((row) => row.user_id)
-
-      if (userIds.length === 0) {
-        setLeaderboard([])
-        setLoadingLeaderboard(false)
-        return
-      }
-
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, display_name')
-        .in('id', userIds)
-
-      if (profilesError) {
-        console.error(profilesError)
-        setLoadingLeaderboard(false)
-        return
-      }
-
-      const profileMap = Object.fromEntries(
-        profiles.map((profile) => [
-          profile.id,
-          profile.display_name,
-        ])
-      )
-
-      const result = totals.map((row) => ({
-        ...row,
-        display_name:
-          profileMap[row.user_id] ?? 'Neznámý hráč',
-      }))
-
-      setLeaderboard(result)
-      setLoadingLeaderboard(false)
-    }
-
-    loadLeaderboard()
-  }, [session, leaderboardRefreshKey])
 
   // =========================
   // ADMIN STATUS
@@ -858,8 +784,6 @@ function App() {
                 : match
             )
           )
-
-          setLeaderboardRefreshKey((current) => current + 1)
         }}
         onMatchDeleted={(matchId) => {
           setMatches((currentMatches) =>
@@ -869,7 +793,6 @@ function App() {
           )
 
           setMatchesRefreshKey((current) => current + 1)
-          setLeaderboardRefreshKey((current) => current + 1)
         }}
       />
     )
@@ -891,76 +814,6 @@ function App() {
       />
 
       <main className="main-shell">
-        <section className="leaderboard-card">
-          <div className="section-heading">
-            <div>
-              <h2>CELKOVÉ POŘADÍ</h2>
-              
-            </div>
-
-            <span className="section-meta">
-              {leaderboard.length} hráčů
-            </span>
-          </div>
-
-          {loadingLeaderboard && (
-            <div className="loading-state">Načítám pořadí…</div>
-          )}
-
-          {!loadingLeaderboard && leaderboard.length === 0 && (
-            <div className="empty-state">
-              Zatím tu nejsou žádné výsledky.
-            </div>
-          )}
-
-          {!loadingLeaderboard && leaderboard.length > 0 && (
-            <div className="leaderboard-wrap">
-              <table className="leaderboard-table">
-                <thead>
-                  <tr>
-                    <th>Poř.</th>
-                    <th>Hráč</th>
-                    <th>Body</th>
-                    <th>Přesně</th>
-                    <th>Správně</th>
-                    <th>Tipů</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {leaderboard.map((player, index) => (
-                    <tr
-                      key={player.user_id}
-                      className={
-                        index < 3
-                          ? `rank-row rank-${index + 1}`
-                          : ''
-                      }
-                    >
-                      <td>
-                        <span className="rank">
-                          {rankLabels[index] ?? `${index + 1}.`}
-                        </span>
-                      </td>
-                      <td>
-                        <strong>{player.display_name}</strong>
-                      </td>
-                      <td>
-                        <strong className="points">
-                          {player.total_points}
-                        </strong>
-                      </td>
-                      <td>{player.exact_tips}</td>
-                      <td>{player.correct_tips}</td>
-                      <td>{player.tip_count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
         <section className="round-section">
           <div
             className="stage-tabs"

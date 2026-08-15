@@ -3,6 +3,8 @@ import { supabase } from './supabaseClient'
 import { getStageOrder, stageLabels, stageOptions } from './stages'
 import Topbar from './Topbar'
 
+const rankLabels = ['🥇', '🥈', '🥉']
+
 const pointLabels = {
   5: 'Přesný tip',
   2: 'Správný výsledek',
@@ -23,6 +25,75 @@ function ResultsPage({
   const [loadingIndex, setLoadingIndex] = useState(true)
   const [loadingResults, setLoadingResults] = useState(false)
   const [message, setMessage] = useState('')
+  const [leaderboard, setLeaderboard] = useState([])
+  const [loadingLeaderboard, setLoadingLeaderboard] = useState(true)
+
+  useEffect(() => {
+    async function loadLeaderboard() {
+      if (!session) {
+        setLeaderboard([])
+        setLoadingLeaderboard(false)
+        return
+      }
+
+      setLoadingLeaderboard(true)
+
+      const { data: totals, error: totalsError } = await supabase
+        .from('leaderboard_totals')
+        .select(`
+          user_id,
+          total_points,
+          exact_tips,
+          correct_tips,
+          tip_count
+        `)
+        .order('total_points', { ascending: false })
+        .order('exact_tips', { ascending: false })
+
+      if (totalsError) {
+        console.error(totalsError)
+        setLoadingLeaderboard(false)
+        return
+      }
+
+      const userIds = totals.map((row) => row.user_id)
+
+      if (userIds.length === 0) {
+        setLeaderboard([])
+        setLoadingLeaderboard(false)
+        return
+      }
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, display_name')
+        .in('id', userIds)
+
+      if (profilesError) {
+        console.error(profilesError)
+        setLoadingLeaderboard(false)
+        return
+      }
+
+      const profileMap = Object.fromEntries(
+        profiles.map((profile) => [
+          profile.id,
+          profile.display_name,
+        ])
+      )
+
+      setLeaderboard(
+        totals.map((row) => ({
+          ...row,
+          display_name:
+            profileMap[row.user_id] ?? 'Neznámý hráč',
+        }))
+      )
+      setLoadingLeaderboard(false)
+    }
+
+    loadLeaderboard()
+  }, [session])
 
   useEffect(() => {
     async function loadHistoryIndex() {
@@ -370,6 +441,75 @@ function ResultsPage({
               skutečný výsledek i získané body.
             </p>
           </div>
+        </section>
+
+        <section className="leaderboard-card">
+          <div className="section-heading">
+            <div>
+              <h2>CELKOVÉ POŘADÍ</h2>
+            </div>
+
+            <span className="section-meta">
+              {leaderboard.length} hráčů
+            </span>
+          </div>
+
+          {loadingLeaderboard && (
+            <div className="loading-state">Načítám pořadí…</div>
+          )}
+
+          {!loadingLeaderboard && leaderboard.length === 0 && (
+            <div className="empty-state">
+              Zatím tu nejsou žádné výsledky.
+            </div>
+          )}
+
+          {!loadingLeaderboard && leaderboard.length > 0 && (
+            <div className="leaderboard-wrap">
+              <table className="leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>Poř.</th>
+                    <th>Hráč</th>
+                    <th>Body</th>
+                    <th>Přesně</th>
+                    <th>Správně</th>
+                    <th>Tipů</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {leaderboard.map((player, index) => (
+                    <tr
+                      key={player.user_id}
+                      className={
+                        index < 3
+                          ? `rank-row rank-${index + 1}`
+                          : ''
+                      }
+                    >
+                      <td>
+                        <span className="rank">
+                          {rankLabels[index] ?? `${index + 1}.`}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{player.display_name}</strong>
+                      </td>
+                      <td>
+                        <strong className="points">
+                          {player.total_points}
+                        </strong>
+                      </td>
+                      <td>{player.exact_tips}</td>
+                      <td>{player.correct_tips}</td>
+                      <td>{player.tip_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         {loadingIndex && (
