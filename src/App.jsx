@@ -236,7 +236,7 @@ function App() {
 
       const grouped = new Map()
 
-      data.forEach((match) => {
+      ;(data ?? []).forEach((match) => {
         const stage = match.stage ?? 'regular'
         const key = `${stage}:${match.round}`
         const kickoff = new Date(match.kickoff_at).getTime()
@@ -252,6 +252,9 @@ function App() {
 
         const group = grouped.get(key)
 
+        // Pro automatický výběr nepočítáme zrušené ani odložené zápasy.
+        // Jakmile sync-schedule vrátí odložený zápas na "scheduled",
+        // jeho nový termín se sem automaticky znovu započítá.
         if (
           Number.isFinite(kickoff) &&
           match.status !== 'cancelled' &&
@@ -267,7 +270,7 @@ function App() {
 
       const selections = [...grouped.values()]
         .map((group) => {
-          const kickoffTimes = group.kickoffTimes.sort(
+          const kickoffTimes = [...group.kickoffTimes].sort(
             (a, b) => a - b
           )
 
@@ -278,6 +281,7 @@ function App() {
           return {
             stage: group.stage,
             round: group.round,
+            kickoffTimes,
             firstKickoff: kickoffTimes[0],
             lastKickoff:
               kickoffTimes[kickoffTimes.length - 1],
@@ -311,26 +315,52 @@ function App() {
       const now = Date.now()
       const matchDurationBuffer = 3 * 60 * 60 * 1000
 
+      // 1) Pokud je některý zápas LIVE, zobrazíme jeho kolo.
       const liveSelection = selections.find(
         (selection) => selection.hasLive
       )
 
+      // 2) Jinak hledáme konkrétní zápas, který začal nejvýše
+      // před 3 hodinami. Důležité: NEBEREME celý rozsah kola
+      // firstKickoff -> lastKickoff, protože náhradní termín může
+      // být o týdny později a staré kolo by pak působilo jako aktivní.
       const activeSelection = selections.find(
         (selection) =>
-          now >= selection.firstKickoff &&
-          now <=
-            selection.lastKickoff + matchDurationBuffer
+          selection.kickoffTimes.some(
+            (kickoff) =>
+              kickoff <= now &&
+              now <= kickoff + matchDurationBuffer
+          )
       )
 
-      const nextSelection = selections.find(
-        (selection) => selection.firstKickoff > now
-      )
+      // 3) Najdeme kolo obsahující úplně nejbližší budoucí zápas,
+      // bez ohledu na číslo kola.
+      const nextSelection = selections
+        .map((selection) => ({
+          selection,
+          nextKickoff: selection.kickoffTimes.find(
+            (kickoff) => kickoff > now
+          ),
+        }))
+        .filter(
+          (item) => item.nextKickoff !== undefined
+        )
+        .sort(
+          (a, b) =>
+            a.nextKickoff - b.nextKickoff
+        )[0]?.selection
+
+      // 4) Pokud už není nic budoucího, zobrazíme kolo
+      // s nejpozději odehraným zápasem.
+      const latestSelection = [...selections].sort(
+        (a, b) => b.lastKickoff - a.lastKickoff
+      )[0]
 
       const defaultSelection =
         liveSelection ??
         activeSelection ??
         nextSelection ??
-        selections[selections.length - 1]
+        latestSelection
 
       const currentSelectionExists = selections.some(
         (selection) =>
@@ -338,6 +368,7 @@ function App() {
           selection.round === selectedRound
       )
 
+      // Ruční výběr uživateli nepřepisujeme.
       if (
         selectionManuallyChanged &&
         currentSelectionExists
@@ -540,7 +571,6 @@ function App() {
   function selectStage(stage) {
     const stageSelections = availableSelections
       .filter((selection) => selection.stage === stage)
-      .sort((a, b) => a.round - b.round)
 
     if (stageSelections.length === 0) {
       return
@@ -555,20 +585,37 @@ function App() {
 
     const activeSelection = stageSelections.find(
       (selection) =>
-        now >= selection.firstKickoff &&
-        now <=
-          selection.lastKickoff + matchDurationBuffer
+        selection.kickoffTimes.some(
+          (kickoff) =>
+            kickoff <= now &&
+            now <= kickoff + matchDurationBuffer
+        )
     )
 
-    const nextSelection = stageSelections.find(
-      (selection) => selection.firstKickoff > now
-    )
+    const nextSelection = stageSelections
+      .map((selection) => ({
+        selection,
+        nextKickoff: selection.kickoffTimes.find(
+          (kickoff) => kickoff > now
+        ),
+      }))
+      .filter(
+        (item) => item.nextKickoff !== undefined
+      )
+      .sort(
+        (a, b) =>
+          a.nextKickoff - b.nextKickoff
+      )[0]?.selection
+
+    const latestSelection = [...stageSelections].sort(
+      (a, b) => b.lastKickoff - a.lastKickoff
+    )[0]
 
     const targetSelection =
       liveSelection ??
       activeSelection ??
       nextSelection ??
-      stageSelections[stageSelections.length - 1]
+      latestSelection
 
     setSelectedStage(stage)
     setSelectedRound(targetSelection.round)
