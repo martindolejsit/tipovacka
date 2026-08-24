@@ -7,6 +7,7 @@ const rankLabels = ['🥇', '🥈', '🥉']
 
 const pointLabels = {
   5: 'Přesný tip',
+  3: 'Správný výsledek + blízké skóre',
   2: 'Správný výsledek',
   0: 'Bez bodu',
 }
@@ -440,6 +441,39 @@ function ResultsPage({
               Po dohrání zápasu jsou vidět tipy všech hráčů,
               skutečný výsledek i získané body.
             </p>
+
+            <div
+              className="points-legend"
+              aria-label="Legenda bodování"
+            >
+              <span className="points-legend-item">
+                <span className="history-points history-points-5">
+                  5 b
+                </span>
+                Přesně
+              </span>
+
+              <span className="points-legend-item">
+                <span className="history-points history-points-3">
+                  3 b
+                </span>
+                Blízké skóre
+              </span>
+
+              <span className="points-legend-item">
+                <span className="history-points history-points-2">
+                  2 b
+                </span>
+                Správný vítěz / remíza
+              </span>
+
+              <span className="points-legend-item">
+                <span className="history-points history-points-0">
+                  0 b
+                </span>
+                Bez bodu
+              </span>
+            </div>
           </div>
         </section>
 
