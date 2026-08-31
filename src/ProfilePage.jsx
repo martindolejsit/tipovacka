@@ -1,6 +1,122 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
 import Topbar from './Topbar'
+
+function EmailReminderSettings({ email }) {
+  const [enabled, setEnabled] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [reload, setReload] = useState(0)
+  const requestVersion = useRef(0)
+  const savingRef = useRef(false)
+
+  useEffect(() => {
+    let disposed = false
+
+    async function loadPreference() {
+      if (savingRef.current || document.visibilityState === 'hidden') return
+      const version = ++requestVersion.current
+      try {
+        const { data, error } = await supabase.rpc('get_my_tip_email_setting')
+        if (disposed || version !== requestVersion.current) return
+        if (error || typeof data !== 'boolean') throw new Error('Load failed')
+        setEnabled(data)
+        setLoaded(true)
+        setFailed(false)
+        setMessage('')
+      } catch {
+        if (disposed || version !== requestVersion.current) return
+        setLoaded(false)
+        setFailed(true)
+        setMessage('Nastavení upozornění se nepodařilo načíst. Zkus to znovu.')
+      }
+    }
+
+    loadPreference()
+    window.addEventListener('focus', loadPreference)
+    document.addEventListener('visibilitychange', loadPreference)
+    return () => {
+      disposed = true
+      requestVersion.current++
+      window.removeEventListener('focus', loadPreference)
+      document.removeEventListener('visibilitychange', loadPreference)
+    }
+  }, [reload])
+
+  async function togglePreference() {
+    if (!loaded || savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    setMessage('')
+    const version = ++requestVersion.current
+    try {
+      const { data, error } = await supabase.rpc('set_my_tip_email_setting', {
+        p_enabled: !enabled,
+      })
+      if (version !== requestVersion.current) return
+      if (error || typeof data !== 'boolean') throw new Error('Save failed')
+      setEnabled(data)
+      setFailed(false)
+      setMessage(data ? 'E-mailové připomínky jsou zapnuté ✓' : 'E-mailové připomínky jsou vypnuté ✓')
+    } catch {
+      if (version !== requestVersion.current) return
+      // Po přerušení sítě mohl zápis proběhnout. Další změnu dovolíme až po načtení.
+      setLoaded(false)
+      setFailed(true)
+      setMessage('Výsledek uložení se nepodařilo ověřit. Načti nastavení znovu.')
+    } finally {
+      if (version === requestVersion.current) {
+        savingRef.current = false
+        setSaving(false)
+      }
+    }
+  }
+
+  return (
+    <section className="profile-settings-card" style={{ gridColumn: '1 / -1' }}>
+      <div className="profile-card-heading">
+        <span className="section-kicker">UPOZORNĚNÍ</span>
+        <h2>E-mailové připomínky</h2>
+        <p>
+          Pokud ti chybí tipy na dnešní zápasy, připomeneme je přibližně
+          dvě hodiny před prvním z nich. Nejvýše jeden e-mail za den.
+        </p>
+      </div>
+      <div className="profile-form">
+        <p className="profile-form-note" style={{ margin: 0, overflowWrap: 'anywhere' }}>
+          Posíláme na potvrzenou přihlašovací adresu: <strong>{email || 'Není dostupná'}</strong>
+        </p>
+        <button
+          className="profile-save-button"
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="E-mailové připomínky chybějících tipů"
+          disabled={!loaded || saving}
+          onClick={togglePreference}
+        >
+          {saving ? 'Ukládám…' : !loaded ? (failed ? 'Nastavení není načtené' : 'Načítám…') : enabled ? 'Zapnuto — vypnout připomínky' : 'Vypnuto — zapnout připomínky'}
+        </button>
+        {message && (
+          <p role="status" className={`profile-form-message ${failed ? 'error' : 'success'}`}>
+            {message}
+          </p>
+        )}
+        {!loaded && failed && (
+          <button className="profile-save-button" type="button" onClick={() => setReload((value) => value + 1)}>
+            Načíst znovu
+          </button>
+        )}
+        <p className="profile-form-note">
+          Pokud máš vše natipováno, nic neposíláme. Odběr můžeš kdykoli
+          vypnout zde nebo odkazem v e-mailu. Časy se řídí pásmem Europe/Prague.
+        </p>
+      </div>
+    </section>
+  )
+}
 
 function ProfilePage({
   session,
@@ -396,6 +512,8 @@ function ProfilePage({
               </p>
             </form>
           </section>
+
+          <EmailReminderSettings key={session?.user?.id} email={session?.user?.email} />
 
           <section className="profile-settings-card profile-password-card">
             <div className="profile-card-heading">
