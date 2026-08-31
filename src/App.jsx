@@ -15,6 +15,56 @@ const statusLabels = {
   cancelled: 'Zrušeno',
 }
 
+function getMatchKickoff(match) {
+  if (!match.kickoff_at) return null
+
+  const kickoff = new Date(match.kickoff_at).getTime()
+  return Number.isFinite(kickoff) ? kickoff : null
+}
+
+// Stejná uzávěrka jako dosud: pouze scheduled, a to do výkopu.
+// Neplatný nebo chybějící termín tipování neotevře.
+function isTipLocked(match, now) {
+  const kickoff = getMatchKickoff(match)
+
+  return (
+    match.status !== 'scheduled' ||
+    kickoff === null ||
+    kickoff <= now
+  )
+}
+
+function sortMatchesForTips(matches) {
+  return [...matches].sort((a, b) => {
+    // Naplánované zápasy mají přednost, ostatní tvoří druhou skupinu.
+    const statusDifference =
+      Number(a.status !== 'scheduled') -
+      Number(b.status !== 'scheduled')
+
+    if (statusDifference !== 0) return statusDifference
+
+    // V obou skupinách řadíme podle celého data a času výkopu.
+    const kickoffA = getMatchKickoff(a) ?? Infinity
+    const kickoffB = getMatchKickoff(b) ?? Infinity
+
+    if (kickoffA === kickoffB) return 0
+    return kickoffA < kickoffB ? -1 : 1
+  })
+}
+
+function formatCountdown(milliseconds) {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000))
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const clock = [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':')
+
+  return days > 0 ? `${days} d ${clock}` : clock
+}
+
 
 function App() {
   const [session, setSession] = useState(null)
@@ -35,6 +85,33 @@ function App() {
   const [selectionManuallyChanged, setSelectionManuallyChanged] = useState(false)
   const [availableSelections, setAvailableSelections] = useState([])
   const [matchesRefreshKey, setMatchesRefreshKey] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
+
+  const currentUserId = session?.user.id
+  const isHomePage = !['/admin', '/results', '/profile'].includes(
+    window.location.pathname
+  )
+
+  // Odpočet běží jen na přihlášené hlavní stránce, bez dotazů do DB/API.
+  useEffect(() => {
+    if (!currentUserId || !isHomePage) return
+
+    const updateNow = () => setNow(Date.now())
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') updateNow()
+    }
+
+    updateNow()
+    const interval = window.setInterval(updateNow, 1000)
+    window.addEventListener('focus', updateNow)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', updateNow)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [currentUserId, isHomePage])
 
   // =========================
   // AUTH
@@ -151,6 +228,10 @@ function App() {
           home_score:
             existingPrediction?.home_score?.toString() ?? '',
           away_score:
+            existingPrediction?.away_score?.toString() ?? '',
+          saved_home_score:
+            existingPrediction?.home_score?.toString() ?? '',
+          saved_away_score:
             existingPrediction?.away_score?.toString() ?? '',
           message: '',
           saving: false,
@@ -463,6 +544,14 @@ function App() {
 
     if (!tip) return
 
+    // Ověříme skutečný čas i při kliknutí těsně před dalším tikem.
+    // Konečné povolení zápisu nadále zajišťují pravidla databáze.
+    const saveTime = Date.now()
+    if (isTipLocked(match, saveTime)) {
+      setNow(saveTime)
+      return
+    }
+
     const homeScore = Number(tip.home_score)
     const awayScore = Number(tip.away_score)
 
@@ -524,6 +613,8 @@ function App() {
         [match.id]: {
           ...currentTips[match.id],
           saving: false,
+          saved_home_score: String(homeScore),
+          saved_away_score: String(awayScore),
           message: 'Tip uložen ✓',
         },
       }))
@@ -563,6 +654,8 @@ function App() {
         ...currentTips[match.id],
         predictionId: data.id,
         saving: false,
+        saved_home_score: String(homeScore),
+        saved_away_score: String(awayScore),
         message: 'Tip uložen ✓',
       },
     }))
@@ -849,6 +942,12 @@ function App() {
   // HLAVNÍ STRÁNKA
   // =========================
 
+  // Řazení mění pouze karty na hlavní stránce, nikoli výběr kola.
+  const sortedMatches = sortMatchesForTips(matches)
+  const nextClosingMatch = sortedMatches.find(
+    (match) => !isTipLocked(match, now)
+  )
+
   return (
     <div className="app-page">
       <Topbar
@@ -945,18 +1044,81 @@ function App() {
             </div>
           )}
 
+          {!loadingMatches && matches.length > 0 && (
+            <section
+              className="tip-deadline-banner"
+              aria-labelledby="tip-deadline-title"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px',
+                padding: '18px 20px',
+                marginBottom: '20px',
+                border: '1px solid rgba(148, 163, 184, 0.35)',
+                borderRadius: '16px',
+              }}
+            >
+              <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                <h3 id="tip-deadline-title" style={{ margin: '0 0 6px', fontSize: '1rem' }}>
+                  {nextClosingMatch
+                    ? 'Nejbližší uzávěrka tipů'
+                    : 'Tipování v tomto kole není otevřené'}
+                </h3>
+
+                {nextClosingMatch ? (
+                  <>
+                    <p style={{ margin: '0 0 6px', fontSize: '0.9rem', overflowWrap: 'anywhere' }}>
+                      <strong>
+                        {nextClosingMatch.home_team.name}
+                        {' – '}
+                        {nextClosingMatch.away_team.name}
+                      </strong>
+                      <br />
+                      {formatKickoff(nextClosingMatch.kickoff_at)}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.8 }}>
+                    Není tu žádný naplánovaný zápas s otevřeným tipováním.
+                  </p>
+                )}
+              </div>
+
+              {nextClosingMatch && (
+                <div>
+                  <span style={{ display: 'block', fontSize: '0.75rem', opacity: 0.8 }}>
+                    Do uzavření zbývá
+                  </span>
+                  <strong
+                    role="timer"
+                    aria-live="off"
+                    style={{
+                      display: 'block',
+                      fontSize: 'clamp(1.2rem, 2.5vw, 1.65rem)',
+                      fontVariantNumeric: 'tabular-nums',
+                      lineHeight: 1.3,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {formatCountdown(getMatchKickoff(nextClosingMatch) - now)}
+                  </strong>
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="matches-grid">
-            {matches.map((match) => {
+            {(loadingMatches ? [] : sortedMatches).map((match) => {
               const tip = tips[match.id]
 
-              const locked =
-                match.status !== 'scheduled' ||
-                new Date(match.kickoff_at) <= new Date()
+              const locked = isTipLocked(match, now)
 
               const hasSavedTip =
-                tip &&
-                tip.home_score !== '' &&
-                tip.away_score !== ''
+                tip?.predictionId != null &&
+                tip.saved_home_score !== '' &&
+                tip.saved_away_score !== ''
 
               return (
                 <article
@@ -1018,8 +1180,26 @@ function App() {
                   </div>
 
                   {!locked && tip && (
-                    <div className="tip-area">
-                      <span className="tip-label">Tvůj tip</span>
+                    <div className="tip-area" style={{ alignItems: 'center' }}>
+                      <p
+                        className="tip-countdown"
+                        style={{ margin: 0, fontSize: '0.75rem', lineHeight: 1.4, alignSelf: 'center' }}
+                      >
+                        Tipování se uzavře za{' '}
+                        <strong
+                          role="timer"
+                          aria-live="off"
+                          style={{ fontSize: 'inherit', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
+                        >
+                          {formatCountdown(getMatchKickoff(match) - now)}
+                        </strong>
+                      </p>
+                      <span
+                        className="tip-label"
+                        style={{ margin: 0, lineHeight: 1.4, alignSelf: 'center', whiteSpace: 'nowrap' }}
+                      >
+                        Tvůj tip
+                      </span>
 
                       <div className="score-inputs">
                         <input
@@ -1087,9 +1267,9 @@ function App() {
                     <div className="locked-area">
                       {hasSavedTip && (
                         <div className="saved-tip">
-                          <span>Tvůj tip</span>
+                          <span>Tvůj uložený tip</span>
                           <strong>
-                            {tip.home_score}:{tip.away_score}
+                            {tip.saved_home_score}:{tip.saved_away_score}
                           </strong>
                         </div>
                       )}
